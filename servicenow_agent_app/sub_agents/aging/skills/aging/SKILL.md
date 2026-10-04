@@ -1,75 +1,82 @@
 ---
 name: aging
-description: Calculate average aging of currently open incidents using optional month, year, and assignment-group filters.
+description: Calculate average aging of currently open incidents with optional time and assignment-group filters.
 ---
 
-# Average Aging Skill
+# Aging Skill
 
 ## Purpose
 
 Calculate the average aging of currently open incidents.
 
-## Definition of Currently Open
+## Currently Open Definition
 
-An incident is currently open when its status is one of:
+Currently open incidents have one of these statuses:
 
 - New
 - In Progress
 - On Hold
 
-An incident with:
-
-status = 'Closed'
-
-is not currently open.
+Closed incidents are excluded.
 
 ## Aging Definition
 
-For a currently open incident:
+For each currently open incident:
 
 aging = CURRENT_TIMESTAMP() - opened_date
 
-Average aging is the average of the aging of all eligible
-currently open incidents.
+Average aging is the average of the eligible incident ages.
 
 ## Time Filter
 
 Time is OPTIONAL.
 
-If the user specifies a month and year:
+If the user supplies month and year:
 
-- Use opened_date to determine the month.
+Use opened_date to determine the month.
 
-If the user does not specify a month:
+If no month is supplied:
 
-- Use ALL available history.
+Use ALL available history.
 
-Never force the user to provide a month.
+Do not ask for a month.
 
-If a month is provided without a year, ask for the year.
+If the month is supplied without a year:
+
+Ask for the year.
 
 ## Assignment Group
 
 Assignment group is OPTIONAL.
 
-Valid assignment groups:
+If a specific assignment group is supplied:
 
-- Application Dev
-- Database Admin
-- Service Desk
-- Cloud Infrastructure
-- Cyber Security
-- Network Support
+Calculate average aging for that group.
 
-If supplied:
+If no group is supplied:
 
-- Restrict the calculation to that assignment group.
+Calculate overall average aging across all groups.
 
-If not supplied:
+Do not invent assignment groups.
 
-- Include all assignment groups.
+## Overall Aging
 
-Never invent an assignment group.
+Use the overall aging capability when the user asks:
+
+- What is the average aging?
+- What is the average age of open incidents?
+- What is the average aging of open incidents?
+- What is the average aging for August 2026?
+- What is the average aging for Network Support?
+
+## Aging By Assignment Group
+
+Use the grouped capability when the user asks:
+
+- What is the average aging for each assignment group?
+- Show aging by assignment group.
+- Compare average aging across assignment groups.
+- Give me average open incident aging associated with each group.
 
 ## Examples
 
@@ -77,78 +84,46 @@ Never invent an assignment group.
 
 Means:
 
-- currently open incidents
+- status in New, In Progress, On Hold
 - all available history
 - all assignment groups
 
-"What is the average aging of open incidents for August 2026?"
+"What is the average aging for August 2026?"
 
 Means:
 
-- status IN ('New', 'In Progress', 'On Hold')
+- currently open statuses
 - opened_date in August 2026
-- all assignment groups
-
-"What is the average aging for Network Support?"
-
-Means:
-
-- currently open incidents
-- all available history
-- assignment_group = Network Support
+- all groups
 
 "What is the average aging for August 2026 for Network Support?"
 
 Means:
 
-- status IN ('New', 'In Progress', 'On Hold')
+- currently open statuses
 - opened_date in August 2026
 - assignment_group = Network Support
 
+"What is the average aging for each assignment group?"
+
+Means:
+
+- currently open statuses
+- all available history
+- group by assignment_group
+
 ## Output
+
+Return the metric.
+
+Do not return individual incident records for an average-aging
+question.
 
 Return:
 
-- requested period
-- assignment group, if supplied
-- number of currently open incidents included
-- average aging
+- period
+- assignment group if applicable
+- number of open incidents used
+- average aging in days
 
-Use days as the primary business-friendly unit.
-
-Example:
-
-"Average aging is 18.4 days."
-
-## No Matching Data
-
-If there are no matching currently open incidents:
-
-Clearly state that no matching open incidents were found.
-
-Do not return an invented result.
-
-## Important Distinction
-
-This skill calculates the aging of incidents that are currently open.
-
-It is different from:
-
-"incidents opened during a month."
-
-Do not use status to determine whether an incident was opened
-during a month.
-
-Do not include Closed incidents.
-
-## Monthly Interpretation
-
-For this first version:
-
-"average aging for August 2026"
-
-means:
-
-currently open incidents whose opened_date falls in August 2026.
-
-This definition should remain consistent across the application.
+Do not invent values.

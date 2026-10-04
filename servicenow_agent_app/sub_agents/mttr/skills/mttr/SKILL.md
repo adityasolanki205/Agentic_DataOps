@@ -1,6 +1,6 @@
 ---
 name: mttr
-description: Calculate Mean Time To Resolve for closed incidents using optional month, year, and assignment-group filters.
+description: Calculate Mean Time To Resolve for closed incidents with optional time and assignment-group filtering.
 ---
 
 # MTTR Skill
@@ -9,32 +9,21 @@ description: Calculate Mean Time To Resolve for closed incidents using optional 
 
 Calculate Mean Time To Resolve (MTTR) for closed incidents.
 
-## Definition of Closed Incident
+## Closed Incident Definition
 
-Only incidents with:
+A closed incident has:
 
 status = 'Closed'
 
-are included.
-
-Do not include:
-
-- New
-- In Progress
-- On Hold
+Only closed incidents are included.
 
 ## MTTR Definition
 
-For each closed incident:
+For each eligible incident:
 
 resolution time = closed_date - opened_date
 
-MTTR is the average resolution time across the
-eligible closed incidents.
-
-Conceptually:
-
-MTTR = AVG(closed_date - opened_date)
+MTTR is the average resolution time.
 
 The calculation should preserve timestamp precision.
 
@@ -42,40 +31,52 @@ The calculation should preserve timestamp precision.
 
 Time is OPTIONAL.
 
-If the user specifies a month and year:
+If the user provides month and year:
 
-- Use closed_date to determine the month.
+Use closed_date to determine the month.
 
-If no month is specified:
+If the user does not provide a month:
 
-- Use ALL available historical closed incidents.
+Use ALL available historical data.
 
-Never force the user to provide a month.
+Do not ask for a month.
 
-If a month is specified without a year, ask for the year.
+If the user gives a month without a year:
+
+Ask for the year.
 
 ## Assignment Group
 
 Assignment group is OPTIONAL.
 
-Valid assignment groups:
+If a specific assignment group is provided:
 
-- Application Dev
-- Database Admin
-- Service Desk
-- Cloud Infrastructure
-- Cyber Security
-- Network Support
+Calculate MTTR for that group.
 
-If supplied:
+If no group is provided:
 
-- Calculate MTTR only for that assignment group.
+Calculate overall MTTR across all groups.
 
-If not supplied:
+Do not invent assignment groups.
 
-- Calculate MTTR across all assignment groups.
+## Overall MTTR
 
-Never invent an assignment group.
+Use the overall MTTR capability when the user asks:
+
+- What is MTTR?
+- What is the mean time to resolve?
+- What is our average resolution time?
+- What is MTTR for August 2026?
+- What is MTTR for Network Support?
+
+## MTTR By Assignment Group
+
+Use the grouped capability when the user asks:
+
+- What is MTTR for each assignment group?
+- Show MTTR by assignment group.
+- Compare MTTR across assignment groups.
+- Give me MTTR associated with each assignment group.
 
 ## Examples
 
@@ -85,15 +86,15 @@ Means:
 
 - all closed incidents
 - all available history
-- all assignment groups
+- all groups
 
 "What is MTTR for August 2026?"
 
 Means:
 
-- closed incidents only
+- status = Closed
 - closed_date in August 2026
-- all assignment groups
+- all groups
 
 "What is MTTR for August 2026 for Network Support?"
 
@@ -103,41 +104,27 @@ Means:
 - closed_date in August 2026
 - assignment_group = Network Support
 
+"What is MTTR for each assignment group?"
+
+Means:
+
+- status = Closed
+- all available history
+- group by assignment_group
+
 ## Output
+
+MTTR is a metric.
+
+Do not return individual incident records unless the user
+explicitly requests the underlying incidents.
 
 Return:
 
-- requested period
-- assignment group, if supplied
-- number of closed incidents included
-- average MTTR
+- period
+- assignment group if applicable
+- closed incident count used
+- MTTR in hours
+- MTTR in days when useful
 
-Use a consistent readable unit such as:
-
-- hours
-- days
-
-If useful, provide both.
-
-Example:
-
-"MTTR was 54.7 hours (2.28 days)."
-
-## No Matching Data
-
-If no eligible closed incidents exist:
-
-Clearly state that no matching closed incidents were found.
-
-Do not return an invented MTTR.
-
-## Important
-
-MTTR is a calculated metric.
-
-Do not ask the user for incident details unless the user explicitly
-requests the incidents contributing to the metric.
-
-Do not calculate MTTR from non-closed incidents.
-
-For monthly analysis, the month is determined by closed_date.
+Do not invent values.

@@ -1,0 +1,47 @@
+{
+  "criteria": {
+    "tool_trajectory_avg_score": {
+      "threshold": 1.0,
+      "match_type": "IN_ORDER"
+    },
+
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.8,
+      "judge_model_options": {
+        "judge_model": "gemini-flash-latest",
+        "num_samples": 3
+      },
+
+      "rubrics": [
+        {
+          "rubric_id": "no_unnecessary_details",
+          "rubric_content": {
+            "text_property": "For count or metric questions, the agent does not return individual incident records unless the user explicitly requests details, records, tickets, or incident IDs."
+          }
+        },
+
+        {
+          "rubric_id": "correct_scope",
+          "rubric_content": {
+            "text_property": "The response correctly reflects the requested time scope and assignment-group scope. When no time or assignment-group filter is provided, the response uses all available data and all groups as appropriate."
+          }
+        },
+
+        {
+          "rubric_id": "clear_business_response",
+          "rubric_content": {
+            "text_property": "The response clearly states the requested metric or count and does not add irrelevant information."
+          }
+        }
+      ]
+    },
+
+    "hallucinations_v1": {
+      "threshold": 0.9,
+      "judge_model_options": {
+        "judge_model": "gemini-flash-latest",
+        "num_samples": 3
+      }
+    }
+  }
+}

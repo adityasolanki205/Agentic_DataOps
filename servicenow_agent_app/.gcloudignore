@@ -1,0 +1,28 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# ADK local session data
+.adk/
+
+# Python virtual environment
+bin/
+include/
+lib/
+lib64
+pyvenv.cfg
+.venv/
+venv/
+incident-agent-env/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+
+# Backup files
+*.bak
+*~
+
+# Git metadata
+.git/

@@ -1,10 +1,10 @@
 from google.adk import Agent
 
+from .sub_agents.incident_summary.agent import incident_summary_agent
 from .sub_agents.opened_incidents.agent import opened_incidents_agent
 from .sub_agents.closed_incidents.agent import closed_incidents_agent
 from .sub_agents.mttr.agent import mttr_agent
 from .sub_agents.aging.agent import aging_agent
-from .sub_agents.incident_summary.agent import incident_summary_agent
 
 
 root_agent = Agent(
@@ -66,47 +66,20 @@ root_agent = Agent(
 
         - Closed
 
-        ============================================================
-        TIME SCOPE
-        ============================================================
+        TIME FILTER RULES
 
-        For every analytics request, the user must provide either:
+        Time filters are optional.
 
-        1.TIME FILTER IS OPTIONAL
-        
-        A month/year may be supplied by the user.
+        If the user specifies a month and year, use that period.
 
-        If supplied, use it.
+        If the user does not specify a month or year,
+        use all available data.
 
-        If not supplied, use all available data.
+        If the user specifies a month but no year,
+        ask the user which year to use.
 
-        Never force the user to specify a month unless the
-        business question explicitly requires a monthly comparison.
-
-        OR
-
-        2. All available data.
-
-        These phrases mean ALL:
-
-        - everything
-        - all
-        - all available data
-        - entire history
-        - for all time
-        - overall
-
-        Never assume the current month.
-
-        Never assume a year.
-
-        If the user has not specified a period, ask:
-
-        "Would you like this for a specific month or for all available data?"
-
-        If the user gives a month but does not give a year, ask:
-
-        "What year should I use?"
+        Never assume the current month or year.
+        Never ask for a time period when the user has not requested one.
 
         ============================================================
         ASSIGNMENT GROUP

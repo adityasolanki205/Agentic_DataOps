@@ -1,0 +1,212 @@
+
+
+{
+  "eval_set_id": "servicenow_incident_eval",
+  "name": "ServiceNow Incident Analytics Evaluation",
+  "description": "Tests for incident counts, filters, MTTR, aging, and details",
+  "eval_cases": [
+    {
+      "eval_id": "total_incident_count",
+      "session_input": {
+        "app_name": "servicenow_agent_app",
+        "user_id": "eval_user_1",
+        "state": {}
+      },
+      "conversation": [
+        {
+          "invocation_id": "test_001",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is the count of incidents in the table?"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Return the total incident count across all available data. Show the count only, without listing individual incidents."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "opened_incidents_august",
+      "session_input": {
+        "app_name": "servicenow_agent_app",
+        "user_id": "eval_user_1",
+        "state": {}
+      },
+      "conversation": [
+        {
+          "invocation_id": "test_002",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "How many incidents were opened in August 2026?"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Return the count of incidents opened during August 2026, filtering on opened_date. Do not list individual incidents."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "closed_incident_count",
+      "session_input": {
+        "app_name": "servicenow_agent_app",
+        "user_id": "eval_user_1",
+        "state": {}
+      },
+      "conversation": [
+        {
+          "invocation_id": "test_003",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "How many incidents were closed in August 2026?"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Return the count of incidents closed during August 2026, using closed_date and closed status. Do not list individual incidents."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "assignment_group_count",
+      "session_input": {
+        "app_name": "servicenow_agent_app",
+        "user_id": "eval_user_1",
+        "state": {}
+      },
+      "conversation": [
+        {
+          "invocation_id": "test_004",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "How many incidents belong to the Database Admin assignment group?"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Return the total incident count for the Database Admin assignment group across all available data. Do not list individual incidents."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "mttr_calculation",
+      "session_input": {
+        "app_name": "servicenow_agent_app",
+        "user_id": "eval_user_1",
+        "state": {}
+      },
+      "conversation": [
+        {
+          "invocation_id": "test_005",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is the mean time to resolve for closed incidents?"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Calculate the average duration between opened_date and closed_date for closed incidents across all available data. Return the metric without listing incidents."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "open_incident_aging",
+      "session_input": {
+        "app_name": "servicenow_agent_app",
+        "user_id": "eval_user_1",
+        "state": {}
+      },
+      "conversation": [
+        {
+          "invocation_id": "test_006",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "What is the average aging of open incidents?"
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Calculate average aging using the current time minus opened_date for incidents with status New, In Progress, or On Hold. Return the metric without listing incidents."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "eval_id": "incident_details",
+      "session_input": {
+        "app_name": "servicenow_agent_app",
+        "user_id": "eval_user_1",
+        "state": {}
+      },
+      "conversation": [
+        {
+          "invocation_id": "test_007",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Show me the details of incidents opened in August 2026."
+              }
+            ]
+          },
+          "final_response": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Return the individual incident details for incidents opened during August 2026."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

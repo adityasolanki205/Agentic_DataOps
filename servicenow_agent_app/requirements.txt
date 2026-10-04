@@ -1,19 +1,9 @@
-# Google Agent Development Kit (ADK) framework
-google-adk>=2.0.0
+# Google Agent Development Kit
+google-adk
 
-# Google Cloud BigQuery client for data operations
-google-cloud-bigquery>=3.20.0
+# BigQuery client library
+google-cloud-bigquery
 
-# Google Authentication and Cloud services helper
-google-auth>=2.29.0
-
-# Environment variables management
-python-dotenv>=1.0.0
-
-# Data generation and manipulation (for the 10k ServiceNow dataset script)
-pandas>=2.0.0
-db-dtypes>=1.2.0
-
-# Web server for ADK local development UI
-fastapi>=0.110.0
-uvicorn>=0.28.0
+# Google Cloud authentication and service support
+google-auth
+google-cloud-aiplatform
