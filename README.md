@@ -31,17 +31,6 @@ The exact questions supported depend on the tools and instructions configured in
 
 ## Architecture Overview
 
-```mermaid
-flowchart TD
-    U[User] --> A[Google ADK Agent]
-    A --> T[Agent Tools and Skills]
-    T --> BQ[BigQuery Incidents Table]
-    BQ --> T
-    T --> A
-    A --> R[Natural-language answer]
-    R --> U
-    A --> CR[Cloud Run Deployment]
-```
 <img width="1672" height="941" alt="ServiceNow Incident Analytics Architecture" src="https://github.com/user-attachments/assets/d87fc94b-c575-49b5-912e-db919c3d121b" />
 
 ### Components
