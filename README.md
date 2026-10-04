@@ -42,6 +42,7 @@ flowchart TD
     R --> U
     A --> CR[Cloud Run Deployment]
 ```
+<img width="1672" height="941" alt="ServiceNow Incident Analytics Architecture" src="https://github.com/user-attachments/assets/d87fc94b-c575-49b5-912e-db919c3d121b" />
 
 ### Components
 
