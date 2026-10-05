@@ -99,10 +99,6 @@ The exact questions supported depend on the tools and instructions configured in
 
 ---
 
-## Architecture Overview
-
-<img width="1672" height="941" alt="ServiceNow Incident Analytics Architecture" src="https://github.com/user-attachments/assets/d87fc94b-c575-49b5-912e-db919c3d121b" />
-
 ### Components
 
 1. **Agent layer**
@@ -123,43 +119,7 @@ The exact questions supported depend on the tools and instructions configured in
 
 The architecture follows a hierarchical multi-agent structure. The root supervisor agent (`ServiceNowMasterAgent`) intercepts user queries, validates parameters (such as time boundaries and assignment groups), disambiguates user intent through conversational follow-ups, and delegates execution exclusively to domain-specific specialist agents:
 
-```mermaid
-graph TD
-    User([User / Web UI]) -->|Natural Language Query| RootAgent[ServiceNowMasterAgent<br/>Root Supervisor]
-    
-    subgraph Multi-Agent Layer
-        RootAgent -->|High-Level Counts & Group Breakdown| SummaryAgent[IncidentSummaryAgent]
-        RootAgent -->|Filter by opened_date| OpenedAgent[OpenedIncidentAgent]
-        RootAgent -->|Filter by closed_date & Status='Closed'| ClosedAgent[ClosedIncidentAgent]
-        RootAgent -->|Calculate Mean Time to Resolve| MTTRAgent[MTTRAgent]
-        RootAgent -->|Calculate Open Backlog Aging| AgingAgent[AgingAgent]
-    end
-
-    subgraph Skills & Toolsets
-        SummaryAgent --> Skill1[incident-summary Skill]
-        SummaryAgent --> Tool1[count_all_incidents<br/>count_open_incidents_by_group]
-        
-        OpenedAgent --> Skill2[opened-incidents Skill]
-        OpenedAgent --> Tool2[count_opened_incidents<br/>get_opened_incident_details]
-        
-        ClosedAgent --> Skill3[closed-incidents Skill]
-        ClosedAgent --> Tool3[count_closed_incidents<br/>count_closed_incidents_by_group<br/>get_closed_incident_details]
-        
-        MTTRAgent --> Skill4[mttr Skill]
-        MTTRAgent --> Tool4[calculate_mttr<br/>calculate_mttr_by_group]
-        
-        AgingAgent --> Skill5[aging Skill]
-        AgingAgent --> Tool5[calculate_open_incident_aging<br/>calculate_open_incident_aging_by_group]
-    end
-
-    subgraph Data Layer
-        Tool1 --> BQ[(Google BigQuery<br/>servicenow_itsm.incidents)]
-        Tool2 --> BQ
-        Tool3 --> BQ
-        Tool4 --> BQ
-        Tool5 --> BQ
-    end
-```
+<img width="1672" height="941" alt="ServiceNow Incident Analytics Architecture" src="https://github.com/user-attachments/assets/d87fc94b-c575-49b5-912e-db919c3d121b" />
 
 ---
 
