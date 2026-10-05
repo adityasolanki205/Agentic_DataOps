@@ -29,10 +29,17 @@ An AI-powered incident analytics assistant built with **Google Agent Development
   - [5. MTTRAgent (Resolution Time Specialist)](#5-mttragent-resolution-time-specialist)
   - [6. AgingAgent (Open Ticket Aging Specialist)](#6-agingagent-open-ticket-aging-specialist)
 - [Skills System & Toolsets](#skills-system--toolsets)
-- [Codebase Walkthrough & Code Explanations](#codebase-walkthrough--code-explanations)
-  - [Synthetic Data Generator (`scripts/generate_servicenow_data.py`)](#synthetic-data-generator-scriptsgenerate_servicenow_datapy)
-  - [Root Supervisor Agent (`servicenow_agent_app/agent.py`)](#root-supervisor-agent-servicenow_agent_appagentpy)
-  - [Sub-Agent Tool Implementations](#sub-agent-tool-implementations)
+- [Codebase Walkthrough & Detailed Code Explanations](#codebase-walkthrough--detailed-code-explanations)
+  - [1. Synthetic Data Generator (`scripts/generate_servicenow_data.py`)](#1-synthetic-data-generator-scriptsgenerate_servicenow_datapy)
+  - [2. Root Supervisor Agent (`servicenow_agent_app/agent.py`)](#2-root-supervisor-agent-servicenow_agent_appagentpy)
+  - [3. Sub-Agent Construction & Tool Binding Pattern](#3-sub-agent-construction--tool-binding-pattern)
+  - [4. Detailed Sub-Agent Tool Implementations](#4-detailed-sub-agent-tool-implementations)
+    - [A. Incident Summary Tools (`incident_summary_tools.py`)](#a-incident-summary-tools-incident_summary_toolspy)
+    - [B. Opened Incident Tools (`opened_incident_tools.py`)](#b-opened-incident-tools-opened_incident_toolspy)
+    - [C. Closed Incident Tools (`closed_incident_tools.py`)](#c-closed-incident-tools-closed_incident_toolspy)
+    - [D. MTTR Calculation Tools (`mttr_tools.py`)](#d-mttr-calculation-tools-mttr_toolspy)
+    - [E. Open Incident Aging Tools (`aging_tools.py`)](#e-open-incident-aging-tools-aging_toolspy)
+  - [5. Parameterized SQL & Anti-Injection Architecture](#5-parameterized-sql--anti-injection-architecture)
 - [Data Model & Schema](#data-model)
 - [Technology Stack](#technology-stack)
 - [Libraries and Frameworks Used](#libraries-and-frameworks-used)
@@ -99,6 +106,10 @@ The exact questions supported depend on the tools and instructions configured in
 
 ---
 
+## Architecture Overview
+
+<img width="1672" height="941" alt="ServiceNow Incident Analytics Architecture" src="https://github.com/user-attachments/assets/d87fc94b-c575-49b5-912e-db919c3d121b" />
+
 ### Components
 
 1. **Agent layer**
@@ -119,7 +130,52 @@ The exact questions supported depend on the tools and instructions configured in
 
 The architecture follows a hierarchical multi-agent structure. The root supervisor agent (`ServiceNowMasterAgent`) intercepts user queries, validates parameters (such as time boundaries and assignment groups), disambiguates user intent through conversational follow-ups, and delegates execution exclusively to domain-specific specialist agents:
 
-<img width="1672" height="941" alt="ServiceNow Incident Analytics Architecture" src="https://github.com/user-attachments/assets/d87fc94b-c575-49b5-912e-db919c3d121b" />
+```mermaid
+graph TD
+    User([User / Web UI]) -->|Natural Language Query| RootAgent[ServiceNowMasterAgent<br/>Root Supervisor]
+    
+    subgraph Multi-Agent Layer
+        RootAgent -->|High-Level Counts & Group Breakdown| SummaryAgent[IncidentSummaryAgent]
+        RootAgent -->|Filter by opened_date| OpenedAgent[OpenedIncidentAgent]
+        RootAgent -->|Filter by closed_date & Status='Closed'| ClosedAgent[ClosedIncidentAgent]
+        RootAgent -->|Calculate Mean Time to Resolve| MTTRAgent[MTTRAgent]
+        RootAgent -->|Calculate Open Backlog Aging| AgingAgent[AgingAgent]
+    end
+
+    subgraph Skills & Toolsets
+        SummaryAgent --> Skill1[incident-summary Skill]
+        SummaryAgent --> Tool1[count_all_incidents<br/>count_open_incidents_by_group]
+        
+        OpenedAgent --> Skill2[opened-incidents Skill]
+        OpenedAgent --> Tool2[count_opened_incidents<br/>get_opened_incident_details]
+        
+        ClosedAgent --> Skill3[closed-incidents Skill]
+        ClosedAgent --> Tool3[count_closed_incidents<br/>count_closed_incidents_by_group<br/>get_closed_incident_details]
+        
+        MTTRAgent --> Skill4[mttr Skill]
+        MTTRAgent --> Tool4[calculate_mttr<br/>calculate_mttr_by_group]
+        
+        AgingAgent --> Skill5[aging Skill]
+        AgingAgent --> Tool5[calculate_open_incident_aging<br/>calculate_open_incident_aging_by_group]
+    end
+
+    subgraph Data Layer
+        Tool1 --> BQ[(Google BigQuery<br/>servicenow_itsm.incidents)]
+        Tool2 --> BQ
+        Tool3 --> BQ
+        Tool4 --> BQ
+        Tool5 --> BQ
+    end
+```
+
+#### Multi-Agent Execution Lifecycle:
+1. **Query Ingestion**: User submits a natural-language query via the interface.
+2. **Supervisor Disambiguation & Parameter Validation**: `ServiceNowMasterAgent` inspects intent, extracts dimensions (e.g., month/year, target assignment group), and triggers conversational follow-up if ambiguous (e.g., prompt for year if only month was given).
+3. **Targeted Sub-Agent Delegation**: The supervisor routes execution context directly to the appropriate specialist agent.
+4. **Skill Guidance & Tool Invocation**: The specialist sub-agent evaluates rules from its `SKILL.md` and triggers the corresponding parameterized BigQuery tool.
+5. **Secure BigQuery Analytics**: The tool executes a type-safe SQL query via `QueryJobConfig` and converts raw BigQuery rows into a structured dictionary.
+6. **LLM Synthesis**: Gemini formulates a concise, natural-language response for the user with calculated metrics and context.
+
 
 ---
 
@@ -192,30 +248,64 @@ The agent uses the **Google ADK Skills** module (`google.adk.skills.load_skill_f
 
 ---
 
-## Codebase Walkthrough & Code Explanations
+## Codebase Walkthrough & Detailed Code Explanations
 
-### Synthetic Data Generator (`scripts/generate_servicenow_data.py`)
+### 1. Synthetic Data Generator (`scripts/generate_servicenow_data.py`)
 This script generates a realistic synthetic ITSM dataset of 10,000 incident tickets and loads it directly into Google BigQuery:
-- **Assignment Groups & Assignees**: Six realistic enterprise teams (`Application Dev`, `Database Admin`, `Service Desk`, `Cloud Infrastructure`, `Cyber Security`, `Network Support`) with assigned team members.
-- **Categories & Priorities**: 5 incident categories and 4 priority tiers (`1 - Critical` to `4 - Low`).
-- **Realistic Lifecycle Distribution**: 80% of tickets are generated as `Closed` with resolution times drawn from an exponential distribution (mean ~36 hours, bounded between 15 minutes and 14 days). 20% remain open across `New`, `In Progress`, and `On Hold` statuses with a `None` closed timestamp.
-- **BigQuery Loader**: Uses `google.cloud.bigquery.Client` with `WRITE_TRUNCATE` disposition to ensure repeatable, deterministic test data ingestion.
 
 ```python
-# Example snippet from scripts/generate_servicenow_data.py
-def generate_incidents(num_records=10000):
-    # Generates realistic opened/closed dates, assignment groups, and statuses
-    ...
+import random
+from datetime import datetime, timedelta
+import pandas as pd
+from google.cloud import bigquery
+
+# Project Configuration
+PROJECT_ID = "YOUR_PROJECT_ID"
+DATASET_ID = "servicenow_itsm"
+TABLE_ID = "incidents"
+
+ASSIGNMENT_GROUPS = [
+    "Database Admin", "Network Support", "Service Desk", 
+    "Cloud Infrastructure", "Cyber Security", "Application Dev"
+]
+
+ASSIGNEES = {
+    "Database Admin": ["Alice M.", "Bob K."],
+    "Network Support": ["Charlie D.", "Diana P."],
+    "Service Desk": ["Evan R.", "Fiona L."],
+    "Cloud Infrastructure": ["George B.", "Hannah T."],
+    "Cyber Security": ["Ian W.", "Julia S."],
+    "Application Dev": ["Kevin V.", "Laura C."]
+}
+
+CATEGORIES = ["Hardware", "Software", "Network", "Database", "Security"]
+PRIORITIES = ["1 - Critical", "2 - High", "3 - Moderate", "4 - Low"]
 ```
 
-### Root Supervisor Agent (`servicenow_agent_app/agent.py`)
+#### Key Logic in Data Generation:
+- **Date Window Distribution**: Generates tickets with `opened_date` uniformly distributed across the past 180 days (`timedelta(days=180)`).
+- **80/20 Lifecycle Distribution**:
+  ```python
+  is_closed = random.random() < 0.80
+  if is_closed:
+      status = "Closed"
+      # Resolution time modeled with exponential distribution (mean ~36 hours)
+      resolution_hours = random.expovariate(scale=36)
+      closed_at = opened_at + timedelta(hours=max(0.25, resolution_hours))
+      if closed_at > end_date:
+          closed_at = end_date
+  else:
+      status = random.choice(["New", "In Progress", "On Hold"])
+      closed_at = None
+  ```
+- **Automated BigQuery Ingestion**: Creates dataset if missing and uses `bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")` for clean data reloads.
+
+---
+
+### 2. Root Supervisor Agent (`servicenow_agent_app/agent.py`)
 Defines the `root_agent` (`ServiceNowMasterAgent`) using the Google ADK:
-- Connects the 5 specialized sub-agents via the `sub_agents` parameter.
-- Provides strict routing instructions and system prompts.
-- Prevents hallucination by instructing the agent to delegate rather than write ad-hoc SQL.
 
 ```python
-# Example initialization in servicenow_agent_app/agent.py
 from google.adk import Agent
 from .sub_agents.incident_summary.agent import incident_summary_agent
 from .sub_agents.opened_incidents.agent import opened_incidents_agent
@@ -227,7 +317,7 @@ root_agent = Agent(
     name="ServiceNowMasterAgent",
     model="gemini-3.5-flash-lite",
     description="Lead ServiceNow incident analytics agent...",
-    instruction="...",
+    instruction="""...Routing rules, entity validation, and delegation instructions...""",
     sub_agents=[
         incident_summary_agent,
         opened_incidents_agent,
@@ -238,11 +328,357 @@ root_agent = Agent(
 )
 ```
 
-### Sub-Agent Tool Implementations
-Each sub-agent implements deterministic Python functions that query BigQuery using `google.cloud.bigquery.QueryJobConfig` with parameterized inputs (`ArrayQueryParameter` and `ScalarQueryParameter`):
-- **Safety**: No string interpolation in SQL statements prevents SQL injection.
-- **Time Scope Handlers**: Helper functions such as `_build_date_filter` and `_build_closed_date_filter` convert month/year requests into UTC timestamp windows (`opened_date >= @start_date AND opened_date < @end_date`).
-- **Controlled Limits**: Detail tools enforce hard bounds on row limits (default 100, max 500) to optimize token usage and latency.
+#### Supervisor Design Principles:
+1. **Zero Ad-Hoc SQL at Root**: Root agent never creates SQL statements directly; it delegates execution to specialized sub-agents.
+2. **Entity Validation & Disambiguation**: Checks if user provided a month without a year (asks for year), handles keywords like "all" or "everything", and maps requested teams to valid assignment groups.
+3. **Strict Sub-Agent Routing**:
+   - `OpenedIncidentAgent`: For questions on tickets opened in a specific period (`opened_date`).
+   - `ClosedIncidentAgent`: For closed ticket queries and closed count breakdowns (`closed_date`).
+   - `MTTRAgent`: For Mean Time to Resolve calculations.
+   - `AgingAgent`: For active backlog aging calculations.
+   - `IncidentSummaryAgent`: For overall table counts and open status breakdowns.
+
+---
+
+### 3. Sub-Agent Construction & Tool Binding Pattern
+Each sub-agent follows a modular pattern that couples:
+1. An ADK Skill file (`SKILL.md`) parsed via `load_skill_from_dir`.
+2. A `SkillToolset` wrapper that provides high-level behavioral guidance to Gemini.
+3. Deterministic Python functions registered directly in `tools=[...]`.
+
+Example Sub-Agent Definition (`servicenow_agent_app/sub_agents/incident_summary/agent.py`):
+```python
+from pathlib import Path
+from google.adk import Agent
+from google.adk.skills import load_skill_from_dir
+from google.adk.tools import skill_toolset
+from .tools.incident_summary_tools import count_all_incidents, count_open_incidents_by_group
+
+# Load the skill definition markdown
+incident_summary_skill = load_skill_from_dir(
+    Path(__file__).parent / "skills" / "incident-summary"
+)
+incident_summary_skill_toolset = skill_toolset.SkillToolset(skills=[incident_summary_skill])
+
+# Define the specialized agent
+incident_summary_agent = Agent(
+    name="IncidentSummaryAgent",
+    model="gemini-3.5-flash-lite",
+    description="Specialist for overall incident counts and assignment-group summaries.",
+    instruction="...",
+    tools=[
+        incident_summary_skill_toolset,
+        count_all_incidents,
+        count_open_incidents_by_group,
+    ],
+)
+```
+
+---
+
+### 4. Detailed Sub-Agent Tool Implementations
+
+#### A. Incident Summary Tools (`incident_summary_tools.py`)
+File: `servicenow_agent_app/sub_agents/incident_summary/tools/incident_summary_tools.py`
+
+##### `count_all_incidents()`
+- **Purpose**: Returns the absolute total count of records in the incident table without any filter.
+- **Code**:
+  ```python
+  def count_all_incidents() -> dict:
+      try:
+          if not BQ_PROJECT_ID:
+              return {"status": "ERROR", "message": "BQ_PROJECT_ID is not configured."}
+
+          client = bigquery.Client(project=BQ_PROJECT_ID)
+          table_name = f"`{BQ_PROJECT_ID}.{BQ_DATASET_ID}.{BQ_TABLE_ID}`"
+          query = f"SELECT COUNT(*) AS total_incidents FROM {table_name}"
+
+          result = client.query(query).result()
+          row = list(result)[0]
+          return {
+              "status": "SUCCESS",
+              "total_incidents": int(row["total_incidents"])
+          }
+      except Exception as e:
+          return {"status": "ERROR", "message": str(e)}
+  ```
+
+##### `count_open_incidents_by_group()`
+- **Purpose**: Aggregates currently open incidents (`New`, `In Progress`, `On Hold`) grouped by assignment group.
+- **Code & SQL**:
+  ```python
+  OPEN_STATUSES = ["New", "In Progress", "On Hold"]
+
+  def count_open_incidents_by_group() -> dict:
+      try:
+          client = bigquery.Client(project=BQ_PROJECT_ID)
+          table_name = f"`{BQ_PROJECT_ID}.{BQ_DATASET_ID}.{BQ_TABLE_ID}`"
+
+          query = f"""
+              SELECT
+                  assignment_group,
+                  COUNT(*) AS open_incident_count
+              FROM {table_name}
+              WHERE status IN UNNEST(@open_statuses)
+              GROUP BY assignment_group
+              ORDER BY open_incident_count DESC
+          """
+          config = bigquery.QueryJobConfig(
+              query_parameters=[
+                  bigquery.ArrayQueryParameter("open_statuses", "STRING", OPEN_STATUSES)
+              ]
+          )
+          result = client.query(query, job_config=config).result()
+          groups = [{"assignment_group": row["assignment_group"], "open_incident_count": int(row["open_incident_count"])} for row in result]
+          return {
+              "status": "SUCCESS",
+              "period": "ALL AVAILABLE DATA",
+              "open_incidents_by_assignment_group": groups
+          }
+      except Exception as e:
+          return {"status": "ERROR", "message": str(e)}
+  ```
+
+---
+
+#### B. Opened Incident Tools (`opened_incident_tools.py`)
+File: `servicenow_agent_app/sub_agents/opened_incidents/tools/opened_incident_tools.py`
+
+##### Date Filter Builder (`_build_date_filter`)
+Converts natural language user time requirements into strict UTC timestamp ranges:
+```python
+def _build_date_filter(time_scope: str, month: int = None, year: int = None):
+    time_scope = time_scope.upper().strip()
+    if time_scope not in {"MONTH", "ALL"}:
+        raise ValueError("time_scope must be MONTH or ALL.")
+
+    conditions = []
+    parameters = []
+
+    if time_scope == "MONTH":
+        if month is None or year is None:
+            raise ValueError("For MONTH scope, both month and year are required.")
+        if month < 1 or month > 12:
+            raise ValueError("month must be between 1 and 12.")
+        if year < 2000 or year > 2100:
+            raise ValueError("year must be a valid four-digit year.")
+
+        start_date = datetime(year, month, 1, tzinfo=timezone.utc)
+        # Handle month rollover for end date
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            end_date = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+
+        conditions.append("opened_date >= @start_date")
+        conditions.append("opened_date < @end_date")
+        parameters.extend([
+            bigquery.ScalarQueryParameter("start_date", "TIMESTAMP", start_date),
+            bigquery.ScalarQueryParameter("end_date", "TIMESTAMP", end_date)
+        ])
+
+    return conditions, parameters
+```
+
+##### `count_opened_incidents(time_scope, month, year, assignment_group)`
+- **Purpose**: Counts tickets created within the requested date range, with optional assignment group filtering.
+- **Code & SQL**:
+  ```python
+  def count_opened_incidents(time_scope: str, month: int = None, year: int = None, assignment_group: str = None) -> dict:
+      conditions, parameters = _build_date_filter(time_scope, month, year)
+      
+      if assignment_group:
+          conditions.append("LOWER(assignment_group) = LOWER(@assignment_group)")
+          parameters.append(bigquery.ScalarQueryParameter("assignment_group", "STRING", assignment_group))
+
+      where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+      query = f"SELECT COUNT(*) AS total_opened_incidents FROM {table_name} {where_clause}"
+
+      config = bigquery.QueryJobConfig(query_parameters=parameters)
+      result = client.query(query, job_config=config).result()
+      row = list(result)[0]
+      return {
+          "status": "SUCCESS",
+          "period": f"{year}-{month:02d}" if time_scope.upper() == "MONTH" else "ALL AVAILABLE DATA",
+          "assignment_group": assignment_group or "ALL GROUPS",
+          "total_opened_incidents": int(row["total_opened_incidents"])
+      }
+  ```
+
+##### `get_opened_incident_details(time_scope, month, year, assignment_group, limit=100)`
+- **Purpose**: Fetches row-level details (`incident_id`, `opened_date`, `status`, `assignee`, etc.) with strict limit enforcement (`min=1, max=500`).
+- **Code**:
+  ```python
+  def get_opened_incident_details(time_scope: str, month: int = None, year: int = None, assignment_group: str = None, limit: int = 100) -> dict:
+      limit = max(1, min(limit, 500))  # Prevents token overflow
+      conditions, parameters = _build_date_filter(time_scope, month, year)
+      
+      if assignment_group:
+          conditions.append("LOWER(assignment_group) = LOWER(@assignment_group)")
+          parameters.append(bigquery.ScalarQueryParameter("assignment_group", "STRING", assignment_group))
+
+      where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+      query = f"""
+          SELECT incident_id, opened_date, closed_date, status, assignment_group, assignee, category, priority, short_description
+          FROM {table_name}
+          {where_clause}
+          ORDER BY opened_date DESC
+          LIMIT @limit
+      """
+      parameters.append(bigquery.ScalarQueryParameter("limit", "INT64", limit))
+      config = bigquery.QueryJobConfig(query_parameters=parameters)
+      result = client.query(query, job_config=config).result()
+      # Returns parsed rows with formatted ISO timestamps
+  ```
+
+---
+
+#### C. Closed Incident Tools (`closed_incident_tools.py`)
+File: `servicenow_agent_app/sub_agents/closed_incidents/tools/closed_incident_tools.py`
+
+##### Core Functionality:
+1. `_build_date_filter(time_scope, month, year)`: Filters on `closed_date >= @start_date AND closed_date < @end_date`.
+2. `count_closed_incidents(time_scope, month, year, assignment_group)`:
+   ```sql
+   SELECT COUNT(*) AS total_closed_incidents
+   FROM `PROJECT.DATASET.incidents`
+   WHERE status = 'Closed'
+     AND closed_date >= @start_date AND closed_date < @end_date
+     AND LOWER(assignment_group) = LOWER(@assignment_group)
+   ```
+3. `count_closed_incidents_by_group(time_scope, month, year)`:
+   ```sql
+   SELECT assignment_group, COUNT(*) AS closed_incident_count
+   FROM `PROJECT.DATASET.incidents`
+   WHERE status = 'Closed'
+   GROUP BY assignment_group
+   ORDER BY closed_incident_count DESC
+   ```
+4. `get_closed_incident_details(...)`: Retrieves individual closed records sorted by `closed_date DESC`.
+
+---
+
+#### D. MTTR Calculation Tools (`mttr_tools.py`)
+File: `servicenow_agent_app/sub_agents/mttr/tools/mttr_tools.py`
+
+Mean Time to Resolve measures elapsed time between ticket opening and resolution for closed tickets.
+
+##### `calculate_mttr(time_scope, month, year, assignment_group)`
+- **SQL Implementation**:
+  ```sql
+  SELECT
+      COUNT(*) AS incident_count,
+      AVG(
+          TIMESTAMP_DIFF(closed_date, opened_date, SECOND)
+      ) AS avg_mttr_seconds
+  FROM `PROJECT.DATASET.incidents`
+  WHERE status = 'Closed'
+    AND opened_date IS NOT NULL
+    AND closed_date IS NOT NULL
+  ```
+- **Conversion & Unit Formatting**:
+  ```python
+  avg_mttr_seconds = float(row["avg_mttr_seconds"])
+  avg_mttr_hours = avg_mttr_seconds / 3600
+  avg_mttr_days = avg_mttr_seconds / 86400
+
+  return {
+      "status": "SUCCESS",
+      "period": period,
+      "assignment_group": assignment_group or "ALL GROUPS",
+      "closed_incidents_used": incident_count,
+      "mttr_hours": round(avg_mttr_hours, 2),
+      "mttr_days": round(avg_mttr_days, 2)
+  }
+  ```
+
+##### `calculate_mttr_by_group(time_scope, month, year)`
+- **SQL Implementation**:
+  ```sql
+  SELECT
+      assignment_group,
+      COUNT(*) AS closed_incident_count,
+      AVG(TIMESTAMP_DIFF(closed_date, opened_date, SECOND)) AS avg_mttr_seconds
+  FROM `PROJECT.DATASET.incidents`
+  WHERE status = 'Closed'
+    AND opened_date IS NOT NULL
+    AND closed_date IS NOT NULL
+  GROUP BY assignment_group
+  ORDER BY avg_mttr_seconds DESC
+  ```
+- Iterates through results and computes both `mttr_hours` and `mttr_days` for each assignment group.
+
+---
+
+#### E. Open Incident Aging Tools (`aging_tools.py`)
+File: `servicenow_agent_app/sub_agents/aging/tools/aging_tools.py`
+
+Backlog aging calculates how long active tickets (`New`, `In Progress`, `On Hold`) have remained unresolved relative to `CURRENT_TIMESTAMP()`.
+
+##### `calculate_open_incident_aging(time_scope, month, year, assignment_group)`
+- **SQL Implementation**:
+  ```sql
+  SELECT
+      COUNT(*) AS open_incident_count,
+      AVG(
+          TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), opened_date, SECOND)
+      ) AS avg_age_seconds
+  FROM `PROJECT.DATASET.incidents`
+  WHERE status IN UNNEST(@open_statuses)
+    AND opened_date IS NOT NULL
+  ```
+- **Conversion & Unit Formatting**:
+  ```python
+  avg_age_seconds = float(row["avg_age_seconds"])
+  avg_age_days = avg_age_seconds / 86400
+
+  return {
+      "status": "SUCCESS",
+      "period": period,
+      "assignment_group": assignment_group or "ALL GROUPS",
+      "open_incident_count": incident_count,
+      "average_aging_days": round(avg_age_days, 2)
+  }
+  ```
+
+##### `calculate_open_incident_aging_by_group(time_scope, month, year)`
+- **SQL Implementation**:
+  ```sql
+  SELECT
+      assignment_group,
+      COUNT(*) AS open_incident_count,
+      AVG(TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), opened_date, SECOND)) AS avg_age_seconds
+  FROM `PROJECT.DATASET.incidents`
+  WHERE status IN UNNEST(@open_statuses)
+    AND opened_date IS NOT NULL
+  GROUP BY assignment_group
+  ORDER BY avg_age_seconds DESC
+  ```
+- Calculates per-group active backlog counts and average aging in days.
+
+---
+
+### 5. Parameterized SQL & Anti-Injection Architecture
+
+All tools in the repository adhere to secure database querying standards:
+
+```python
+# Safe Query Parameterization Example
+config = bigquery.QueryJobConfig(
+    query_parameters=[
+        bigquery.ScalarQueryParameter("start_date", "TIMESTAMP", start_date),
+        bigquery.ScalarQueryParameter("end_date", "TIMESTAMP", end_date),
+        bigquery.ScalarQueryParameter("assignment_group", "STRING", assignment_group),
+        bigquery.ArrayQueryParameter("open_statuses", "STRING", OPEN_STATUSES),
+        bigquery.ScalarQueryParameter("limit", "INT64", limit),
+    ]
+)
+```
+
+1. **Zero Raw SQL String Concatenation**: Table parameters and user inputs are never concatenated directly into query strings.
+2. **Type-Safe Validation**: Numerical months (`1-12`) and years (`2000-2100`) are checked in Python before touching BigQuery.
+3. **Structured Response Contracts**: All tools return standardized Python dictionaries containing `"status": "SUCCESS" | "ERROR"`, ensuring predictable LLM parsing and clean error escalation.
 
 ---
 
